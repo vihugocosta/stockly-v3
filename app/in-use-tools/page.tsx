@@ -57,6 +57,12 @@ export default function InUseToolsPage() {
                   <div className="flex items-center text-xs text-slate-500 mt-1">
                     <Hash className="mr-1 h-3 w-3" />
                     <span>Quantidade: {loan.quantity}</span>
+                    {loan.assetId && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span>ID: {loan.assetId}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

@@ -38,6 +38,7 @@
       "type": "object",
       "properties": {
         "toolId": { "type": "string" },
+        "assetId": { "type": "string", "description": "Optional physical ID or patrimony code of the tool" },
         "employeeId": { "type": "string" },
         "type": { "type": "string", "enum": ["checkout", "checkin"] },
         "date": { "type": "string", "format": "date-time" },

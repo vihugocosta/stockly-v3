@@ -20,6 +20,7 @@ export interface Tool {
 export interface Movement {
   id: string;
   toolId: string;
+  assetId?: string;
   employeeId: string;
   type: 'checkout' | 'checkin';
   date: string;
@@ -39,6 +40,7 @@ export interface AdminRequest {
 export interface ActiveLoan {
   toolId: string;
   employeeId: string;
+  assetId?: string;
   quantity: number;
   lastCheckoutDate: string;
 }

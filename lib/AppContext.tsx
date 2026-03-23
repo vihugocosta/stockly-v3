@@ -20,7 +20,7 @@ interface AppContextType {
   addTool: (tool: Omit<Tool, 'id' | 'availableQuantity'>) => void;
   updateTool: (id: string, tool: Omit<Tool, 'id' | 'availableQuantity'>) => void;
   removeTool: (id: string) => void;
-  recordMovement: (movement: Omit<Movement, 'id' | 'date'>) => { success: boolean; message: string };
+  recordMovement: (movement: Omit<Movement, 'id' | 'date'>) => Promise<{ success: boolean; message: string }>;
   adminRequests: AdminRequest[];
   activeLoans: ActiveLoan[];
   requestAdminAccess: () => Promise<{ success: boolean; message: string }>;
@@ -117,18 +117,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [isAuthReady, user, userRole]);
 
   const activeLoans = React.useMemo(() => {
-    const loans = new Map<string, { quantity: number; lastCheckoutDate: string }>();
+    const loans = new Map<string, { quantity: number; lastCheckoutDate: string; assetId?: string }>();
     
     // Sort movements chronologically (oldest first) to replay them
     const sortedMovements = [...movements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     sortedMovements.forEach(m => {
-      const key = `${m.toolId}_${m.employeeId}`;
-      const current = loans.get(key) || { quantity: 0, lastCheckoutDate: '' };
+      const key = `${m.toolId}_${m.employeeId}_${m.assetId || ''}`;
+      const current = loans.get(key) || { quantity: 0, lastCheckoutDate: '', assetId: m.assetId };
       if (m.type === 'checkout') {
-        loans.set(key, { quantity: current.quantity + m.quantity, lastCheckoutDate: m.date });
+        loans.set(key, { quantity: current.quantity + m.quantity, lastCheckoutDate: m.date, assetId: m.assetId });
       } else {
-        loans.set(key, { quantity: Math.max(0, current.quantity - m.quantity), lastCheckoutDate: current.lastCheckoutDate });
+        loans.set(key, { quantity: Math.max(0, current.quantity - m.quantity), lastCheckoutDate: current.lastCheckoutDate, assetId: m.assetId });
       }
     });
     
@@ -136,7 +136,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loans.forEach((data, key) => {
       if (data.quantity > 0) {
         const [toolId, employeeId] = key.split('_');
-        result.push({ toolId, employeeId, quantity: data.quantity, lastCheckoutDate: data.lastCheckoutDate });
+        result.push({ toolId, employeeId, assetId: data.assetId, quantity: data.quantity, lastCheckoutDate: data.lastCheckoutDate });
       }
     });
     
@@ -208,7 +208,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const recordMovement = (movement: Omit<Movement, 'id' | 'date'>) => {
+  const recordMovement = async (movement: Omit<Movement, 'id' | 'date'>) => {
+    if (userRole !== 'admin') {
+      return { success: false, message: 'Acesso negado. Apenas administradores podem registrar movimentações.' };
+    }
+
     const tool = tools.find(t => t.id === movement.toolId);
     const employee = employees.find(e => e.id === movement.employeeId);
 
@@ -235,18 +239,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newQuantity = tool.availableQuantity + movement.quantity;
     }
 
-    const newMovement: Omit<Movement, 'id'> = {
-      ...movement,
+    const newMovement: any = {
+      toolId: movement.toolId,
+      employeeId: movement.employeeId,
+      type: movement.type,
+      quantity: movement.quantity,
       date: new Date().toISOString(),
       previousQuantity,
       newQuantity,
     };
 
+    if (movement.assetId && movement.assetId.trim() !== '') {
+      newMovement.assetId = movement.assetId.trim();
+    }
+
     // Execute Firestore updates
     try {
       const movementRef = doc(collection(db, 'movements'));
-      setDoc(movementRef, newMovement);
-      updateDoc(doc(db, 'tools', tool.id), { availableQuantity: newQuantity });
+      await setDoc(movementRef, newMovement);
+      await updateDoc(doc(db, 'tools', tool.id), { availableQuantity: newQuantity });
       return { success: true, message: 'Movimentação registrada com sucesso.' };
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'movements/tools');

@@ -93,7 +93,10 @@ export default function Dashboard() {
                         {mov.type === 'checkout' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                       </div>
                       <div className="ml-3">
-                        <p className="text-sm font-medium text-slate-900">{tool?.name || 'Ferramenta Removida'}</p>
+                        <p className="text-sm font-medium text-slate-900">
+                          {tool?.name || 'Ferramenta Removida'}
+                          {mov.assetId && <span className="ml-2 text-xs font-normal text-slate-500">ID: {mov.assetId}</span>}
+                        </p>
                         <p className="text-xs text-slate-500">
                           {emp?.name || 'Colaborador Removido'} • {mov.quantity} un.
                           {mov.previousQuantity !== undefined && mov.newQuantity !== undefined ? ` (${mov.previousQuantity} ➔ ${mov.newQuantity})` : ''}

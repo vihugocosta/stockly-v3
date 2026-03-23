@@ -52,8 +52,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "victorhugocosta02@gmail.com" && request.auth.token.email_verified == true));
+        ((request.auth.token.email != null && request.auth.token.email.lower() == "victorhugocosta02@gmail.com") ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function hasOnlyAllowedFields(allowedFields) {
@@ -85,15 +85,17 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser() {
-      return hasOnlyAllowedFields(['email', 'role']) &&
+      return hasOnlyAllowedFields(['id', 'email', 'role']) &&
              hasRequiredFields(['email', 'role']) &&
+             (!('id' in request.resource.data) || isValidString('id', 1, 100)) &&
              isValidString('email', 1, 200) &&
              (request.resource.data.role == 'admin' || request.resource.data.role == 'user');
     }
 
     function isValidAdminRequest() {
-      return hasOnlyAllowedFields(['userId', 'email', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(['id', 'userId', 'email', 'status', 'createdAt']) &&
              hasRequiredFields(['userId', 'email', 'status', 'createdAt']) &&
+             (!('id' in request.resource.data) || isValidString('id', 1, 100)) &&
              isValidString('userId', 1, 100) &&
              isValidString('email', 1, 200) &&
              (request.resource.data.status == 'pending' || request.resource.data.status == 'approved' || request.resource.data.status == 'rejected') &&
@@ -101,20 +103,22 @@ service cloud.firestore {
     }
 
     function isValidEmployee() {
-      return hasOnlyAllowedFields(['name', 'photo', 'role', 'competencies']) &&
-             hasRequiredFields(['name', 'photo', 'role', 'competencies']) &&
+      return hasOnlyAllowedFields(['id', 'name', 'photo', 'role', 'competencies']) &&
+             hasRequiredFields(['name', 'photo', 'role']) &&
+             (!('id' in request.resource.data) || isValidString('id', 1, 100)) &&
              isValidString('name', 1, 100) &&
              isValidString('photo', 0, 500) &&
              isValidString('role', 1, 100) &&
-             isValidList('competencies', 20);
+             (!('competencies' in request.resource.data) || isValidList('competencies', 20));
     }
 
     function isValidTool() {
-      return hasOnlyAllowedFields(['name', 'description', 'requiredCompetencies', 'totalQuantity', 'availableQuantity']) &&
-             hasRequiredFields(['name', 'description', 'requiredCompetencies', 'totalQuantity', 'availableQuantity']) &&
+      return hasOnlyAllowedFields(['id', 'name', 'description', 'requiredCompetencies', 'totalQuantity', 'availableQuantity']) &&
+             hasRequiredFields(['name', 'totalQuantity', 'availableQuantity']) &&
+             (!('id' in request.resource.data) || isValidString('id', 1, 100)) &&
              isValidString('name', 1, 100) &&
-             isValidString('description', 0, 500) &&
-             isValidList('requiredCompetencies', 20) &&
+             (!('description' in request.resource.data) || isValidString('description', 0, 500)) &&
+             (!('requiredCompetencies' in request.resource.data) || isValidList('requiredCompetencies', 20)) &&
              request.resource.data.totalQuantity is number &&
              request.resource.data.totalQuantity >= 0 &&
              request.resource.data.availableQuantity is number &&
@@ -123,9 +127,11 @@ service cloud.firestore {
     }
 
     function isValidMovement() {
-      return hasOnlyAllowedFields(['toolId', 'employeeId', 'type', 'date', 'quantity', 'previousQuantity', 'newQuantity']) &&
+      return hasOnlyAllowedFields(['id', 'toolId', 'assetId', 'employeeId', 'type', 'date', 'quantity', 'previousQuantity', 'newQuantity']) &&
              hasRequiredFields(['toolId', 'employeeId', 'type', 'date', 'quantity']) &&
+             (!('id' in request.resource.data) || isValidString('id', 1, 100)) &&
              isValidString('toolId', 1, 100) &&
+             (!('assetId' in request.resource.data) || isValidString('assetId', 0, 100)) &&
              isValidString('employeeId', 1, 100) &&
              (request.resource.data.type == 'checkout' || request.resource.data.type == 'checkin') &&
              isValidDateString(request.resource.data.date) &&
@@ -167,15 +173,13 @@ service cloud.firestore {
     match /tools/{toolId} {
       allow read: if isAuthenticated();
       allow create: if isAdmin() && isValidTool();
-      allow update: if isAdmin() && isValidTool() || 
-                    (isAuthenticated() && isValidTool() && 
-                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableQuantity']));
+      allow update: if isAdmin() && isValidTool();
       allow delete: if isAdmin() && resource.data.availableQuantity == resource.data.totalQuantity;
     }
 
     match /movements/{movementId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidMovement();
+      allow create: if isAdmin() && isValidMovement();
       allow update: if isAdmin() && isValidMovement();
       allow delete: if isAdmin();
     }
